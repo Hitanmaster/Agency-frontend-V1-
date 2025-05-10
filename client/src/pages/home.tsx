@@ -14,8 +14,17 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
   const [selectedAgency, setSelectedAgency] = useState<MongoAgency | null>(null);
+  const [randomMode, setRandomMode] = useState(false);
 
   // Fetch agency data
+  const agencyQuery = useAgencyData({ 
+    page, 
+    limit, 
+    tag: selectedTag, 
+    search,
+    random: randomMode 
+  });
+  
   const { 
     data, 
     isLoading, 
@@ -25,11 +34,11 @@ export default function Home() {
     fetchNextPage, 
     hasNextPage,
     refetch
-  } = useAgencyData({ page, limit, tag: selectedTag, search });
+  } = agencyQuery;
 
   // Fetch tags for filter
-  const { data: tagsData } = useAgencyData({ endpoint: "tags" });
-  const tags = tagsData?.tags || [];
+  const tagsQuery = useAgencyData({ endpoint: "tags" });
+  const tags = tagsQuery.data?.tags || [];
 
   // Handle search
   const handleSearch = (value: string) => {
@@ -41,6 +50,13 @@ export default function Home() {
   const handleTagSelect = (tag: string | undefined) => {
     setSelectedTag(tag);
     setPage(1);
+  };
+  
+  // Handle random mode toggle
+  const handleRandomModeToggle = (enabled: boolean) => {
+    setRandomMode(enabled);
+    setPage(1);
+    refetch();
   };
 
   // Handle infinite scroll
@@ -75,6 +91,8 @@ export default function Home() {
           selectedTag={selectedTag}
           tags={tags}
           onTagSelect={handleTagSelect}
+          randomMode={randomMode}
+          onRandomModeToggle={handleRandomModeToggle}
         />
         
         {isLoading && <LoadingSkeleton />}
@@ -88,10 +106,10 @@ export default function Home() {
         
         {!isLoading && !isError && data && (
           <MasonryGrid 
-            agencies={data.pages.flatMap(page => page.agencies)}
+            agencies={data.pages.flatMap((page) => page.agencies)}
             onAgencySelect={handleAgencySelect}
             onLoadMore={handleLoadMore}
-            isLoading={isFetchingNextPage}
+            isLoading={isFetchingNextPage || false}
             hasMore={hasNextPage}
           />
         )}

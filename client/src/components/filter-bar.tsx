@@ -50,18 +50,36 @@ export default function FilterBar({
         ))}
       </div>
       
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-neutral-500">Sort by:</span>
-        <Select value={sortOrder} onValueChange={handleSortChange}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Sort order" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest First</SelectItem>
-            <SelectItem value="oldest">Oldest First</SelectItem>
-            <SelectItem value="a-z">A-Z</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center space-x-2">
+          <Switch 
+            id="random-mode" 
+            checked={randomMode}
+            onCheckedChange={onRandomModeToggle}
+          />
+          <Label htmlFor="random-mode" className="flex items-center cursor-pointer">
+            <Shuffle className="h-4 w-4 mr-1 text-neutral-500" />
+            <span className="text-sm text-neutral-500">Random</span>
+          </Label>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-neutral-500">Sort by:</span>
+          <Select 
+            value={sortOrder} 
+            onValueChange={handleSortChange}
+            disabled={randomMode}
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Sort order" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="a-z">A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

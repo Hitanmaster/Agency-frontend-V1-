@@ -6,6 +6,7 @@ interface AgencyQueryParams {
   limit?: number;
   tag?: string;
   search?: string;
+  random?: boolean;
   endpoint?: string;
 }
 
@@ -20,7 +21,14 @@ interface TagsResponse {
   tags: string[];
 }
 
-export function useAgencyData({ page = 1, limit = 12, tag, search, endpoint = "agencies" }: AgencyQueryParams) {
+export function useAgencyData({ 
+  page = 1, 
+  limit = 12, 
+  tag, 
+  search, 
+  random = false,
+  endpoint = "agencies" 
+}: AgencyQueryParams) {
   // For fetching tags, use a regular query
   if (endpoint === "tags") {
     return useQuery<TagsResponse>({
@@ -30,14 +38,16 @@ export function useAgencyData({ page = 1, limit = 12, tag, search, endpoint = "a
 
   // For fetching agencies, use an infinite query
   return useInfiniteQuery<AgencyResponse>({
-    queryKey: ["/api/agencies", { tag, search }],
-    queryFn: async ({ pageParam = 1 }) => {
+    queryKey: ["/api/agencies", { tag, search, random }],
+    queryFn: async ({ pageParam }) => {
+      const currentPage = (pageParam as number) || 1;
       const params = new URLSearchParams();
-      params.append("page", pageParam.toString());
+      params.append("page", currentPage.toString());
       params.append("limit", limit.toString());
       
       if (tag) params.append("tag", tag);
       if (search) params.append("search", search);
+      if (random) params.append("random", 'true');
       
       const response = await fetch(`/api/agencies?${params.toString()}`);
       
@@ -55,6 +65,6 @@ export function useAgencyData({ page = 1, limit = 12, tag, search, endpoint = "a
       }
       return undefined;
     },
-    staleTime: 60000, // 1 minute
+    staleTime: random ? 0 : 60000, // No caching for random mode, 1 minute for normal mode
   });
 }

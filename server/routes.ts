@@ -12,12 +12,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = Number(req.query.limit) || 12;
       const tag = req.query.tag as string | undefined;
       const search = req.query.search as string | undefined;
+      const random = req.query.random === 'true'; // Convert to boolean
+      
+      console.log(`Fetching agencies: page=${page}, limit=${limit}, tag=${tag}, search=${search}, random=${random}`);
       
       const { agencies, totalCount } = await storage.getAgencies({
         page,
         limit,
         tag,
         search,
+        random,
       });
       
       res.json({

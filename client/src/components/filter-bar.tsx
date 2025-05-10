@@ -1,14 +1,25 @@
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useState } from "react";
+import { Shuffle } from "lucide-react";
 
 interface FilterBarProps {
   tags: string[];
   selectedTag?: string;
   onTagSelect: (tag: string | undefined) => void;
+  randomMode: boolean;
+  onRandomModeToggle: (enabled: boolean) => void;
 }
 
-export default function FilterBar({ tags, selectedTag, onTagSelect }: FilterBarProps) {
+export default function FilterBar({ 
+  tags, 
+  selectedTag, 
+  onTagSelect, 
+  randomMode, 
+  onRandomModeToggle 
+}: FilterBarProps) {
   const [sortOrder, setSortOrder] = useState("newest");
 
   const handleSortChange = (value: string) => {

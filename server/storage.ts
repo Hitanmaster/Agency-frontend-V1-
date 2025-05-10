@@ -6,6 +6,7 @@ export interface AgencyQueryParams {
   limit: number;
   tag?: string;
   search?: string;
+  random?: boolean;
 }
 
 export interface IStorage {
@@ -33,7 +34,7 @@ export class MongoStorage implements IStorage {
     }
   }
 
-  async getAgencies({ page, limit, tag, search }: AgencyQueryParams): Promise<{ agencies: MongoAgency[], totalCount: number }> {
+  async getAgencies({ page, limit, tag, search, random = false }: AgencyQueryParams): Promise<{ agencies: MongoAgency[], totalCount: number }> {
     const db = this.client.db(this.dbName);
     const collection = db.collection(this.collectionName);
     
@@ -43,32 +44,71 @@ export class MongoStorage implements IStorage {
     const query: any = {};
     
     if (tag) {
-      query.tags = tag;
+      // Match tag in either tags array or categories array
+      query.$or = [
+        { tags: tag },
+        { categories: tag }
+      ];
     }
     
     if (search) {
+      // Handle both schemas when searching
       query.$or = [
         { agency_name: { $regex: search, $options: "i" } },
-        { project_title: { $regex: search, $options: "i" } }
+        { project_title: { $regex: search, $options: "i" } },
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } }
       ];
     }
     
     // Get total count for pagination
     const totalCount = await collection.countDocuments(query);
     
-    // Get agencies with pagination and sort by scraped_date
-    const agenciesCursor = collection.find(query)
-      .sort({ scraped_date: -1 })
-      .skip(skip)
-      .limit(limit);
+    // Create pipeline for aggregation
+    const pipeline: any[] = [
+      { $match: query }
+    ];
     
-    const agencies = await agenciesCursor.toArray();
+    // Add sorting logic
+    if (random) {
+      // Add a random sort using the $sample stage for true randomness
+      pipeline.push({ $sample: { size: totalCount } });
+    } else {
+      // Default sort by scraped_date when available, otherwise by _id
+      pipeline.push({ 
+        $sort: { 
+          scraped_date: -1,
+          _id: -1 // Fallback sort to ensure consistent ordering
+        } 
+      });
+    }
+    
+    // Add pagination
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: limit });
+    
+    // Execute the aggregation pipeline
+    const agencies = await collection.aggregate(pipeline).toArray();
     
     // Transform MongoDB documents to match our schema
     const validatedAgencies = agencies.map(agency => {
       const transformed = {
         ...agency,
         _id: agency._id.toString(), // Convert ObjectId to string
+        
+        // Map fields from second schema to first schema format for UI consistency
+        agency_name: agency.agency_name || agency.title || "Unknown Agency",
+        project_title: agency.project_title || agency.title || "Untitled Project",
+        project_description: agency.project_description || agency.description || "",
+        project_url: agency.project_url || agency.project_page_url || "",
+        
+        // Handle project images from both schemas
+        project_images: agency.project_images || 
+          (agency.media_url ? [agency.media_url] : []),
+        
+        // Ensure tags is always available as an array
+        tags: agency.tags || 
+          (agency.categories ? Array.isArray(agency.categories) ? agency.categories : [] : [])
       };
       
       // Attempt to validate with our schema
@@ -95,9 +135,24 @@ export class MongoStorage implements IStorage {
         return null;
       }
       
+      // Transform document to match our expected schema
       const transformed = {
         ...agency,
         _id: agency._id.toString(), // Convert ObjectId to string
+        
+        // Map fields from second schema to first schema format for UI consistency
+        agency_name: agency.agency_name || agency.title || "Unknown Agency",
+        project_title: agency.project_title || agency.title || "Untitled Project",
+        project_description: agency.project_description || agency.description || "",
+        project_url: agency.project_url || agency.project_page_url || "",
+        
+        // Handle project images from both schemas
+        project_images: agency.project_images || 
+          (agency.media_url ? [agency.media_url] : []),
+        
+        // Ensure tags is always available as an array
+        tags: agency.tags || 
+          (agency.categories ? Array.isArray(agency.categories) ? agency.categories : [] : [])
       };
       
       return mongoAgencySchema.parse(transformed);
@@ -112,11 +167,18 @@ export class MongoStorage implements IStorage {
       const db = this.client.db(this.dbName);
       const collection = db.collection(this.collectionName);
       
-      // Aggregate to find all unique tags
+      // Gather tags from both schema formats
       const tagsArray = await collection.distinct("tags");
+      const categoriesArray = await collection.distinct("categories");
+      
+      // Combine both arrays and remove duplicates
+      const allTags = [...tagsArray, ...categoriesArray];
       
       // Filter out any null/undefined values and convert to strings
-      return tagsArray.filter(tag => tag != null).map(tag => String(tag));
+      const filteredTags = allTags.filter(tag => tag != null).map(tag => String(tag));
+      
+      // Remove duplicates using a Set and convert back to array
+      return Array.from(new Set(filteredTags));
     } catch (error) {
       console.error("Error fetching tags:", error);
       return [];
@@ -151,29 +213,48 @@ export class MemStorage implements IStorage {
     }
   ];
 
-  async getAgencies({ page, limit, tag, search }: AgencyQueryParams): Promise<{ agencies: MongoAgency[], totalCount: number }> {
+  async getAgencies({ page, limit, tag, search, random = false }: AgencyQueryParams): Promise<{ agencies: MongoAgency[], totalCount: number }> {
     let filteredAgencies = [...this.agencies];
     
     // Apply tag filter
     if (tag) {
       filteredAgencies = filteredAgencies.filter(agency => 
-        agency.tags && agency.tags.includes(tag)
+        (agency.tags && agency.tags.includes(tag)) ||
+        (agency.categories && Array.isArray(agency.categories) && agency.categories.includes(tag))
       );
     }
     
     // Apply search filter
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredAgencies = filteredAgencies.filter(agency => 
-        agency.agency_name.toLowerCase().includes(searchLower) || 
-        (agency.project_title && agency.project_title.toLowerCase().includes(searchLower))
-      );
+      filteredAgencies = filteredAgencies.filter(agency => {
+        const agencyName = agency.agency_name || agency.title || "";
+        const projectTitle = agency.project_title || agency.title || "";
+        const description = agency.project_description || agency.description || "";
+        
+        return (
+          agencyName.toLowerCase().includes(searchLower) || 
+          projectTitle.toLowerCase().includes(searchLower) ||
+          description.toLowerCase().includes(searchLower)
+        );
+      });
     }
     
-    // Sort by scraped_date (newest first)
-    filteredAgencies.sort((a, b) => 
-      new Date(b.scraped_date).getTime() - new Date(a.scraped_date).getTime()
-    );
+    // Apply sorting
+    if (random) {
+      // Shuffle array for random ordering
+      for (let i = filteredAgencies.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [filteredAgencies[i], filteredAgencies[j]] = [filteredAgencies[j], filteredAgencies[i]];
+      }
+    } else {
+      // Sort by scraped_date (newest first)
+      filteredAgencies.sort((a, b) => {
+        const dateA = a.scraped_date ? new Date(a.scraped_date).getTime() : 0;
+        const dateB = b.scraped_date ? new Date(b.scraped_date).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
     
     const totalCount = filteredAgencies.length;
     const skip = (page - 1) * limit;

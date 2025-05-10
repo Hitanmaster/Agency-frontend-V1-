@@ -10,14 +10,14 @@ interface AgencyQueryParams {
   endpoint?: string;
 }
 
-interface AgencyResponse {
+export interface AgencyResponse {
   agencies: MongoAgency[];
   totalCount: number;
   currentPage: number;
   totalPages: number;
 }
 
-interface TagsResponse {
+export interface TagsResponse {
   tags: string[];
 }
 
@@ -37,7 +37,7 @@ export function useAgencyData({
   }
 
   // For fetching agencies, use an infinite query
-  return useInfiniteQuery<AgencyResponse>({
+  return useInfiniteQuery<AgencyResponse, Error>({
     queryKey: ["/api/agencies", { tag, search, random }],
     queryFn: async ({ pageParam }) => {
       const currentPage = (pageParam as number) || 1;

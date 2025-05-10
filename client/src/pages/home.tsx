@@ -5,7 +5,7 @@ import MasonryGrid from "@/components/masonry-grid";
 import ErrorDisplay from "@/components/error-display";
 import LoadingSkeleton from "@/components/loading-skeleton";
 import AgencyDetailModal from "@/components/agency-detail-modal";
-import { useAgencyData } from "@/hooks/use-agency-data";
+import { useAgencyData, AgencyResponse } from "@/hooks/use-agency-data";
 import { MongoAgency } from "@shared/schema";
 
 export default function Home() {
@@ -25,20 +25,23 @@ export default function Home() {
     random: randomMode 
   });
   
+  // Type assertion to fix TypeScript errors
   const { 
     data, 
     isLoading, 
     isError, 
     error, 
-    isFetchingNextPage, 
-    fetchNextPage, 
-    hasNextPage,
     refetch
   } = agencyQuery;
+  
+  // These properties are only available on infinite queries
+  const isFetchingNextPage = 'isFetchingNextPage' in agencyQuery ? agencyQuery.isFetchingNextPage : false;
+  const fetchNextPage = 'fetchNextPage' in agencyQuery ? agencyQuery.fetchNextPage : () => {};
+  const hasNextPage = 'hasNextPage' in agencyQuery ? agencyQuery.hasNextPage : false;
 
   // Fetch tags for filter
   const tagsQuery = useAgencyData({ endpoint: "tags" });
-  const tags = tagsQuery.data?.tags || [];
+  const tags = tagsQuery.data && 'tags' in tagsQuery.data ? tagsQuery.data.tags : [];
 
   // Handle search
   const handleSearch = (value: string) => {
@@ -104,12 +107,12 @@ export default function Home() {
           />
         )}
         
-        {!isLoading && !isError && data && (
+        {!isLoading && !isError && data && 'pages' in data && (
           <MasonryGrid 
-            agencies={data.pages.flatMap((page) => page.agencies)}
+            agencies={data.pages.flatMap((page: AgencyResponse) => page.agencies)}
             onAgencySelect={handleAgencySelect}
             onLoadMore={handleLoadMore}
-            isLoading={isFetchingNextPage || false}
+            isLoading={isFetchingNextPage}
             hasMore={hasNextPage}
           />
         )}

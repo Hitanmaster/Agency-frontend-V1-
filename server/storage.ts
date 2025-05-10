@@ -271,7 +271,8 @@ export class MemStorage implements IStorage {
   async getTags(): Promise<string[]> {
     // Extract all tags from agencies and remove duplicates
     const allTags = this.agencies.flatMap(agency => agency.tags || []);
-    return [...new Set(allTags)];
+    const tagSet = new Set<string>(allTags);
+    return Array.from(tagSet);
   }
 }
 
